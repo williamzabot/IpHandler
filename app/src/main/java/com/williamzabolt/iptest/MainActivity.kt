@@ -24,7 +24,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -40,15 +39,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        requestPermission(this)
         setContent {
             IpTestTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = Color.White
                 ) {
-                    val context = LocalContext.current
                     val devices = remember {
                         mutableStateListOf<DeviceInfo>()
+                    }
+                    val thisDevice = remember {
+                        mutableStateOf<DeviceInfo?>(null)
                     }
                     Column(
                         modifier = Modifier.fillMaxSize(),
@@ -57,23 +59,21 @@ class MainActivity : ComponentActivity() {
                     ) {
                         Button(
                             onClick = {
-                                requestPermission(
-                                    context = context,
-                                    permissionGranted = {
-                                        getIps {
-                                            devices.add(it)
-                                        }
+                                getIps(
+                                    newDevice = {
+                                        devices.add(it)
+                                    },
+                                    getMyDevice = {
+                                        thisDevice.value = it
                                     })
                             }) {
                             Text(text = "Ver quem está na rede")
                         }
                         ShowList(
                             items = devices,
-                            myDevice = DeviceInfo("", "")
+                            myDevice = thisDevice.value
                         )
-
                     }
-
                 }
             }
         }
@@ -93,15 +93,18 @@ class MainActivity : ComponentActivity() {
         ) {
             Column {
                 Text(
-                    text = item.hostname,
+                    text = item.hostname ?: "Genérico",
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
                 )
-                Text(
-                    modifier = Modifier.padding(top = 10.dp),
-                    text = item.ip,
-                    fontSize = 16.sp,
-                )
+                item.ip?.let {
+                    Text(
+                        modifier = Modifier.padding(top = 10.dp),
+                        text = item.ip,
+                        fontSize = 16.sp,
+                    )
+                }
+
                 item.mac?.let {
                     Text(
                         modifier = Modifier.padding(top = 10.dp),
@@ -114,10 +117,13 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun ShowList(items: List<DeviceInfo>, myDevice: DeviceInfo) {
+    fun ShowList(items: List<DeviceInfo>, myDevice: DeviceInfo?) {
         LazyColumn(modifier = Modifier.padding(top = 12.dp)) {
-            item {
-                ItemRow(item = myDevice)
+            myDevice?.let {
+                item {
+                    Text("Este device")
+                    ItemRow(item = myDevice)
+                }
             }
 
             items(items) { item ->
@@ -126,7 +132,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun requestPermission(context: Context, permissionGranted: () -> Unit) {
+    private fun requestPermission(context: Context) {
         if (ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.INTERNET
@@ -134,58 +140,34 @@ class MainActivity : ComponentActivity() {
         ) {
             ActivityCompat.requestPermissions(
                 this@MainActivity,
-                arrayOf(Manifest.permission.INTERNET, Manifest.permission.ACCESS_WIFI_STATE),
+                arrayOf(
+                    Manifest.permission.INTERNET,
+                    Manifest.permission.ACCESS_WIFI_STATE,
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ),
                 PERMISSIONS_REQUEST_INTERNET
             )
-        } else {
-            permissionGranted()
         }
     }
 
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        when (requestCode) {
-            PERMISSIONS_REQUEST_INTERNET -> {
-                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    // getIps()
-                } else {
-                    // permissão negada
-                }
-            }
-        }
-    }
 
     private fun getIps(
-        newDevice: (DeviceInfo) -> Unit
+        newDevice: (DeviceInfo) -> Unit,
+        getMyDevice: (DeviceInfo?) -> Unit
     ) {
         val context = this@MainActivity
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val ipv4 = getIPv4Address(context)
-                if (ipv4?.isNotEmpty() == true) {
-                    val baseIP = ipv4.substring(0, ipv4.lastIndexOf('.') + 1)
-
-
-                    val devicesInfo = scanNetwork(
-                        baseIP = baseIP
+                getMyDevice(ipv4)
+                val ip = ipv4?.ip
+                if (ip?.isNotEmpty() == true) {
+                    scanNetwork(
+                        baseIP = ip.substring(0, ip.lastIndexOf('.') + 1)
                     ) {
                         newDevice(it)
                     }
-                    /* if (devicesInfo.isNotEmpty()) {
-                         text.value = devicesInfo.toString()
-                     } else {
-                         val devicesByArp = scanNetworkByArp(baseIP)
-                         if (devicesByArp.isNotEmpty()) {
-                             text.value = devicesByArp.toString()
-                         } else {
-                             text.value = "Erro ao obter endereços da rede do IP $baseIP"
-                         }
-                     }*/
                 }
 
             } catch (e: Exception) {

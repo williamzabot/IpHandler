@@ -20,9 +20,8 @@ import java.util.regex.Matcher
 import java.util.regex.Pattern
 
 fun getInterfaceIpAddress(
-    defaultInterface: String,
-    nextFunction: () -> String?
-): String? {
+    defaultInterface: String
+): DeviceInfo? {
     try {
         val command = Runtime.getRuntime().exec("ip addr show")
         val reader = BufferedReader(InputStreamReader(command.inputStream))
@@ -33,19 +32,21 @@ fun getInterfaceIpAddress(
                 val ipLine = reader.readLine()
 
                 if (ipLine != null && nextLine != null) {
-                    return extractIPAddress(ipLine)
+                    return DeviceInfo(
+                        ip = extractIPAddress(ipLine)
+                    )
                 }
             }
         }
     } catch (ex: Exception) {
-        return nextFunction.invoke()
+        return null
     }
-    return nextFunction.invoke()
+    return null
 }
 
 private fun getDefaultInterface(
-    nextFunction: (defaultInterface: String) -> String?
-): String? {
+    nextFunction: (defaultInterface: String) -> DeviceInfo?
+): DeviceInfo? {
     try {
         val interfaces: Enumeration<NetworkInterface>? = NetworkInterface.getNetworkInterfaces()
         if (interfaces != null) {
@@ -55,7 +56,10 @@ private fun getDefaultInterface(
                 while (addresses.hasMoreElements()) {
                     val address: InetAddress = addresses.nextElement()
                     if (!address.isLoopbackAddress && !address.isLinkLocalAddress && address.isSiteLocalAddress) {
-                        return address.hostAddress
+                        return DeviceInfo(
+                            ip = address.hostAddress,
+                            hostname = address.hostName
+                        )
                     }
                 }
             }
@@ -86,39 +90,25 @@ private fun extractIPAddress(input: String?): String? {
     }
 }
 
-fun getIPv4Address(context: Context): String? {
-    return getDefaultInterface { defaultInterface ->
-        getIPAddressByWifiConnection(
-            context = context,
-            nextFunction = {
+fun getIPv4Address(context: Context): DeviceInfo? {
+    return getIPAddressByWifiConnection(
+        context = context,
+        nextFunction = {
+            getDefaultInterface { defaultInterface ->
                 getInterfaceIpAddress(
-                    defaultInterface = defaultInterface,
-                    nextFunction = {
-                        getIpByInet(defaultInterface)
-                    }
+                    defaultInterface = defaultInterface
                 )
             }
-        )
-    }
+        }
+    )
 
-
-}
-
-fun getIpByInet(defaultInterface: String): String? {
-    return try {
-        val inetAddress = InetAddress.getByName(defaultInterface)
-        val hostAddress = inetAddress.hostAddress
-        hostAddress
-    } catch (ex: Exception) {
-        null
-    }
 }
 
 
 fun getIPAddressByWifiConnection(
     context: Context,
-    nextFunction: () -> String?
-): String? {
+    nextFunction: () -> DeviceInfo?
+): DeviceInfo? {
     try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val connectivityManager = context.getSystemService(
@@ -130,7 +120,12 @@ fun getIPAddressByWifiConnection(
                 val wifiManager =
                     context.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
                 val wifiInfo = wifiManager.connectionInfo
-                return formatIpAddress(wifiInfo.ipAddress)
+                val ip = formatIpAddress(wifiInfo.ipAddress)
+                return DeviceInfo(
+                    ip = ip,
+                    hostname = InetAddress.getByName(ip).hostName,
+                    mac = wifiInfo.macAddress
+                )
             }
         } else {
             return nextFunction.invoke()
@@ -161,7 +156,7 @@ fun getDefaultInterfaceByIpRoute(): String? {
     return null
 }
 
-data class DeviceInfo(val hostname: String, val ip: String, val mac: String? = null)
+data class DeviceInfo(val hostname: String? = null, val ip: String?, val mac: String? = null)
 
 // Função para varrer a rede e obter IPs ativos
 fun scanNetwork(
