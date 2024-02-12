@@ -154,7 +154,12 @@ fun getDefaultInterfaceByIpRoute(): String? {
     return null
 }
 
-data class DeviceInfo(val hostname: String? = null, val ip: String?, val mac: String? = null)
+data class DeviceInfo(
+    val hostname: String? = null,
+    val ip: String?,
+    val mac: String? = null,
+    val operationalSystem: String? = null
+)
 
 // Função para varrer a rede e obter IPs ativos
 fun scanNetwork(
@@ -177,12 +182,34 @@ private fun searchIp(
     if (address.isReachable(300)) {
         val hostname = address.hostName
         val mac = getMacAddress(targetIP)
+        val operationalSystem = getOsInfo(targetIP)
         val deviceInfo = DeviceInfo(
             hostname = hostname,
             ip = targetIP,
-            mac = mac
+            mac = mac,
+            operationalSystem = operationalSystem
         )
         newDevice(deviceInfo)
+    }
+}
+
+fun getOsInfo(targetIP: String): String? {
+    try {
+        val command = "nmap -O $targetIP"
+        val process = Runtime.getRuntime().exec(command)
+        process.waitFor()
+
+        val reader = BufferedReader(InputStreamReader(process.inputStream))
+        val result = StringBuilder()
+        var line: String?
+
+        while (reader.readLine().also { line = it } != null) {
+            result.append(line).append("\n")
+        }
+
+        return result.toString()
+    } catch (e: Exception) {
+        return null
     }
 }
 
