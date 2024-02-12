@@ -5,23 +5,19 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.text.format.Formatter.formatIpAddress
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import oshi.SystemInfo
+import oshi.hardware.HardwareAbstractionLayer
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.Socket
 import java.net.SocketException
-import java.net.UnknownHostException
 import java.util.Enumeration
 import java.util.regex.Matcher
 import java.util.regex.Pattern
-import oshi.hardware.HardwareAbstractionLayer
-import oshi.hardware.NetworkIF
-import oshi.SystemInfo
 
 fun getInterfaceIpAddress(
     defaultInterface: String,
@@ -170,26 +166,33 @@ data class DeviceInfo(val hostname: String, val ip: String, val mac: String? = n
 // Função para varrer a rede e obter IPs ativos
 fun scanNetwork(
     baseIP: String,
-    nextFunction: () -> List<DeviceInfo>
-): List<DeviceInfo> {
-    val discoveredDevices = mutableListOf<DeviceInfo>()
-
+    newDevice: (DeviceInfo) -> Unit
+) {
     for (i in 1..255) {
         val targetIP = "$baseIP$i"
-
-        try {
+        if (isReachable(targetIP)) {
             val address = InetAddress.getByName(targetIP)
             val hostname = address.hostName
             val mac = getMacAddress(targetIP)
-
             val deviceInfo = DeviceInfo(targetIP, hostname, mac)
-            discoveredDevices.add(deviceInfo)
-        } catch (e: Exception) {
-            return nextFunction.invoke()
+            newDevice(deviceInfo)
         }
     }
+}
 
-    return nextFunction.invoke()
+fun isReachable(targetIP: String): Boolean {
+    val socket = Socket()
+    try {
+        val socketAddress = InetSocketAddress(targetIP, 80)
+        socket.connect(socketAddress, 500) // 1000 milliseconds timeout
+        return (socket.isConnected)
+
+    } catch (ex: Exception) {
+        return false
+
+    } finally {
+        socket.close()
+    }
 }
 
 
@@ -225,16 +228,19 @@ fun scanNetworkByArp(baseIP: String): List<DeviceInfo> = runBlocking {
 }
 
 fun getMacAddress(ip: String): String? {
-    val si = SystemInfo()
-    val hal: HardwareAbstractionLayer = si.hardware
+    try {
+        val si = SystemInfo()
+        val hal: HardwareAbstractionLayer = si.hardware
 
-    val networkIFs = hal.networkIFs
-    for (networkIF in networkIFs) {
-        val addresses = networkIF.iPv4addr
-        if (addresses.contains(ip)) {
-            return networkIF.macaddr
+        val networkIFs = hal.networkIFs
+        for (networkIF in networkIFs) {
+            val addresses = networkIF.iPv4addr
+            if (addresses.contains(ip)) {
+                return networkIF.macaddr
+            }
         }
+    } catch (ex: Exception) {
+        return null
     }
-
     return null
 }
