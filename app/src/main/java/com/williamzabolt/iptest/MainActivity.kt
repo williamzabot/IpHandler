@@ -38,8 +38,6 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
-    val text = mutableStateOf("")
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -69,12 +67,10 @@ class MainActivity : ComponentActivity() {
                             }) {
                             Text(text = "Ver quem está na rede")
                         }
-
-                        Text(
-                            modifier = Modifier.padding(top = 20.dp),
-                            text = text.value
+                        ShowList(
+                            items = devices,
+                            myDevice = DeviceInfo("", "")
                         )
-                        ShowList(items = devices)
 
                     }
 
@@ -84,32 +80,46 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun ItemRow(item: DeviceInfo) {
+    fun ItemRow(
+        item: DeviceInfo
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(
-                    vertical = 16.dp
+                    top = 10.dp,
+                    start = 10.dp
                 )
         ) {
             Column {
                 Text(
-                    text = item.ip,
+                    text = item.hostname,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
                 )
                 Text(
                     modifier = Modifier.padding(top = 10.dp),
-                    text = item.hostname,
+                    text = item.ip,
                     fontSize = 16.sp,
                 )
+                item.mac?.let {
+                    Text(
+                        modifier = Modifier.padding(top = 10.dp),
+                        text = item.mac,
+                        fontSize = 16.sp,
+                    )
+                }
             }
         }
     }
 
     @Composable
-    fun ShowList(items: List<DeviceInfo>) {
+    fun ShowList(items: List<DeviceInfo>, myDevice: DeviceInfo) {
         LazyColumn(modifier = Modifier.padding(top = 12.dp)) {
+            item {
+                ItemRow(item = myDevice)
+            }
+
             items(items) { item ->
                 ItemRow(item = item)
             }
@@ -176,8 +186,6 @@ class MainActivity : ComponentActivity() {
                              text.value = "Erro ao obter endereços da rede do IP $baseIP"
                          }
                      }*/
-                } else {
-                    text.value = "Erro ao obter o endereço IPv4 do device"
                 }
 
             } catch (e: Exception) {
