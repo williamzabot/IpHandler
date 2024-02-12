@@ -11,9 +11,7 @@ import oshi.hardware.HardwareAbstractionLayer
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.InetAddress
-import java.net.InetSocketAddress
 import java.net.NetworkInterface
-import java.net.Socket
 import java.net.SocketException
 import java.util.Enumeration
 import java.util.regex.Matcher
@@ -164,36 +162,29 @@ fun scanNetwork(
     newDevice: (DeviceInfo) -> Unit
 ) {
     for (i in 1..255) {
-        val targetIP = "$baseIP$i"
-        if (isReachable(targetIP)) {
-            val address = InetAddress.getByName(targetIP)
-            val hostname = address.hostName
-            val mac = getMacAddress(targetIP)
-            val deviceInfo = DeviceInfo(
-                hostname = hostname,
-                ip = targetIP,
-                mac = mac
-            )
-            newDevice(deviceInfo)
-        }
+        searchIp("$baseIP$i",
+            newDevice = {
+                newDevice(it)
+            })
     }
 }
 
-fun isReachable(targetIP: String): Boolean {
-    val socket = Socket()
-    try {
-        val socketAddress = InetSocketAddress(targetIP, 80)
-        socket.connect(socketAddress, 500) // 1000 milliseconds timeout
-        return (socket.isConnected)
-
-    } catch (ex: Exception) {
-        return false
-
-    } finally {
-        socket.close()
+private fun searchIp(
+    targetIP: String,
+    newDevice: (DeviceInfo) -> Unit
+) {
+    val address = InetAddress.getByName(targetIP)
+    if (address.isReachable(300)) {
+        val hostname = address.hostName
+        val mac = getMacAddress(targetIP)
+        val deviceInfo = DeviceInfo(
+            hostname = hostname,
+            ip = targetIP,
+            mac = mac
+        )
+        newDevice(deviceInfo)
     }
 }
-
 
 fun scanNetworkByArp(baseIP: String): List<DeviceInfo> = runBlocking {
     val discoveredDevices = mutableListOf<DeviceInfo>()
