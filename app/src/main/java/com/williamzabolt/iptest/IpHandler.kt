@@ -9,6 +9,7 @@ import kotlinx.coroutines.runBlocking
 import oshi.SystemInfo
 import oshi.hardware.HardwareAbstractionLayer
 import java.io.BufferedReader
+import java.io.File
 import java.io.InputStreamReader
 import java.net.InetAddress
 import java.net.NetworkInterface
@@ -195,22 +196,30 @@ private fun searchIp(
 
 fun getOsInfo(targetIP: String): String? {
     try {
-        val command = "nmap -O $targetIP"
-        val process = Runtime.getRuntime().exec(command)
-        process.waitFor()
+        val termuxPath = "/data/data/com.termux/files/usr/bin"
+        val nmapPath = "$termuxPath/nmap"
+        val command = "$nmapPath -O $targetIP"
+
+        val processBuilder = ProcessBuilder(command)
+        processBuilder.directory(File(termuxPath))
+        processBuilder.redirectErrorStream(true)
+        val process = processBuilder.start()
 
         val reader = BufferedReader(InputStreamReader(process.inputStream))
-        val result = StringBuilder()
         var line: String?
-
         while (reader.readLine().also { line = it } != null) {
-            result.append(line).append("\n")
+            // Processar a saída
+            println(line)
         }
 
-        return result.toString()
+        // Aguardar a conclusão do processo
+        val exitCode = process.waitFor()
+        println("Código de saída: $exitCode")
+
     } catch (e: Exception) {
         return null
     }
+    return ""
 }
 
 fun scanNetworkByArp(baseIP: String): List<DeviceInfo> = runBlocking {
