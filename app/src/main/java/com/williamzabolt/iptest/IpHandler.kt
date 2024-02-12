@@ -197,7 +197,6 @@ fun isReachable(targetIP: String): Boolean {
 
 fun scanNetworkByArp(baseIP: String): List<DeviceInfo> = runBlocking {
     val discoveredDevices = mutableListOf<DeviceInfo>()
-
     for (i in 1..255) {
         val targetIP = "$baseIP$i"
         val command = "arp -a $targetIP"
