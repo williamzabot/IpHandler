@@ -169,7 +169,11 @@ fun scanNetwork(
             val address = InetAddress.getByName(targetIP)
             val hostname = address.hostName
             val mac = getMacAddress(targetIP)
-            val deviceInfo = DeviceInfo(targetIP, hostname, mac)
+            val deviceInfo = DeviceInfo(
+                hostname = hostname,
+                ip = targetIP,
+                mac = mac
+            )
             newDevice(deviceInfo)
         }
     }

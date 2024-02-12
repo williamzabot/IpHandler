@@ -121,7 +121,12 @@ class MainActivity : ComponentActivity() {
         LazyColumn(modifier = Modifier.padding(top = 12.dp)) {
             myDevice?.let {
                 item {
-                    Text("Este device")
+                    Text(
+                        modifier = Modifier.padding(
+                            start = 10.dp
+                        ),
+                        text = "Este device"
+                    )
                     ItemRow(item = myDevice)
                 }
             }
