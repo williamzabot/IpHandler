@@ -8,6 +8,7 @@ import android.text.format.Formatter.formatIpAddress
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.InetAddress
@@ -18,6 +19,9 @@ import java.net.UnknownHostException
 import java.util.Enumeration
 import java.util.regex.Matcher
 import java.util.regex.Pattern
+import oshi.hardware.HardwareAbstractionLayer
+import oshi.hardware.NetworkIF
+import oshi.SystemInfo
 
 fun getInterfaceIpAddress(
     defaultInterface: String,
@@ -43,7 +47,9 @@ fun getInterfaceIpAddress(
     return nextFunction.invoke()
 }
 
-private fun getDefaultInterface(): String? {
+private fun getDefaultInterface(
+    nextFunction: (defaultInterface: String) -> String?
+): String? {
     try {
         val interfaces: Enumeration<NetworkInterface>? = NetworkInterface.getNetworkInterfaces()
         if (interfaces != null) {
@@ -53,14 +59,18 @@ private fun getDefaultInterface(): String? {
                 while (addresses.hasMoreElements()) {
                     val address: InetAddress = addresses.nextElement()
                     if (!address.isLoopbackAddress && !address.isLinkLocalAddress && address.isSiteLocalAddress) {
-                        return iFace.name
+                        return address.hostAddress
                     }
                 }
             }
         }
-        return null
+        return nextFunction.invoke(
+            getDefaultInterfaceByIpRoute() ?: "wlan0"
+        )
     } catch (e: SocketException) {
-        return null
+        return nextFunction.invoke(
+            getDefaultInterfaceByIpRoute() ?: "wlan0"
+        )
     }
 }
 
@@ -81,18 +91,21 @@ private fun extractIPAddress(input: String?): String? {
 }
 
 fun getIPv4Address(context: Context): String? {
-    val defaultInterface = getDefaultInterface() ?: getDefaultInterfaceByIpRoute() ?: "wlan0"
-    return getIPAddressByWifiConnection(
-        context = context,
-        nextFunction = {
-            getInterfaceIpAddress(
-                defaultInterface = defaultInterface,
-                nextFunction = {
-                    getIpByInet(defaultInterface)
-                }
-            )
-        }
-    )
+    return getDefaultInterface { defaultInterface ->
+        getIPAddressByWifiConnection(
+            context = context,
+            nextFunction = {
+                getInterfaceIpAddress(
+                    defaultInterface = defaultInterface,
+                    nextFunction = {
+                        getIpByInet(defaultInterface)
+                    }
+                )
+            }
+        )
+    }
+
+
 }
 
 fun getIpByInet(defaultInterface: String): String? {
@@ -152,27 +165,76 @@ fun getDefaultInterfaceByIpRoute(): String? {
     return null
 }
 
+data class DeviceInfo(val hostname: String, val ip: String, val mac: String? = null)
+
 // Função para varrer a rede e obter IPs ativos
-fun scanNetwork(baseIP: String, callback: (List<String>) -> Unit) {
-    CoroutineScope(Dispatchers.IO).launch {
-        val discoveredIPs = mutableListOf<String>()
+fun scanNetwork(
+    baseIP: String,
+    nextFunction: () -> List<DeviceInfo>
+): List<DeviceInfo> {
+    val discoveredDevices = mutableListOf<DeviceInfo>()
 
-        for (i in 1..255) {
-            val targetIP = "$baseIP$i"
+    for (i in 1..255) {
+        val targetIP = "$baseIP$i"
 
-            try {
-                val socket = Socket(targetIP, 80)
-                socket.close()
-                discoveredIPs.add(targetIP)
-            } catch (e: UnknownHostException) {
-                print(e.message)
-            } catch (e: Exception) {
-                print(e.message)
-            }
-        }
+        try {
+            val address = InetAddress.getByName(targetIP)
+            val hostname = address.hostName
+            val mac = getMacAddress(targetIP)
 
-        launch(Dispatchers.Main) {
-            callback(discoveredIPs)
+            val deviceInfo = DeviceInfo(targetIP, hostname, mac)
+            discoveredDevices.add(deviceInfo)
+        } catch (e: Exception) {
+            return nextFunction.invoke()
         }
     }
+
+    return nextFunction.invoke()
+}
+
+
+fun scanNetworkByArp(baseIP: String): List<DeviceInfo> = runBlocking {
+    val discoveredDevices = mutableListOf<DeviceInfo>()
+
+    for (i in 1..255) {
+        val targetIP = "$baseIP$i"
+        val command = "arp -a $targetIP"
+        try {
+            val process = Runtime.getRuntime().exec(command)
+            val reader = BufferedReader(InputStreamReader(process.inputStream))
+            var line: String? = reader.readLine()
+            while (line != null) {
+                if (line.contains("dynamic")) {
+                    val parts = line.split("\\s+".toRegex())
+                    val mac = parts[1]
+                    val hostname = parts[0]
+                    val deviceInfo = DeviceInfo(mac, hostname, targetIP)
+                    discoveredDevices.add(deviceInfo)
+                    break
+                }
+                line = reader.readLine()
+            }
+            process.waitFor()
+            process.destroy()
+        } catch (e: Exception) {
+            println(e.message)
+        }
+    }
+
+    return@runBlocking discoveredDevices
+}
+
+fun getMacAddress(ip: String): String? {
+    val si = SystemInfo()
+    val hal: HardwareAbstractionLayer = si.hardware
+
+    val networkIFs = hal.networkIFs
+    for (networkIF in networkIFs) {
+        val addresses = networkIF.iPv4addr
+        if (addresses.contains(ip)) {
+            return networkIF.macaddr
+        }
+    }
+
+    return null
 }

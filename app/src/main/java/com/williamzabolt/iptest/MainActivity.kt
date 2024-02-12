@@ -108,12 +108,18 @@ class MainActivity : ComponentActivity() {
         val context = this@MainActivity
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val wlan0IP = getIPv4Address(context)
-                if (wlan0IP?.isNotEmpty() == true) {
-                    val baseIP = wlan0IP.substring(0, wlan0IP.lastIndexOf('.') + 1)
-                    scanNetwork(baseIP) { discoveredIPs ->
-                        text.value = discoveredIPs.toString()
-                    }
+                val ipv4 = getIPv4Address(context)
+                if (ipv4?.isNotEmpty() == true) {
+                    val baseIP = ipv4.substring(0, ipv4.lastIndexOf('.') + 1)
+                    val devicesInfo = scanNetwork(
+                        baseIP = baseIP,
+                        nextFunction = {
+                            scanNetworkByArp(baseIP)
+                        }
+                    )
+
+
+                    text.value = devicesInfo.toString()
                 } else {
                     text.value = "Erro ao obter o endereço IPv4 do device"
                 }
