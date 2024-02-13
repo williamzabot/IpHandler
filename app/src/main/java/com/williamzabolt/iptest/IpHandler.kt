@@ -140,7 +140,7 @@ fun getIPAddressByWifiConnection(
                 return DeviceInfo(
                     ip = ip,
                     hostname = InetAddress.getByName(ip).hostName,
-                    mac = getHostMacAddress() ?: getMacAddressByOshi(ip)
+                    mac = getHostMacAddress() ?: getHostMacAddressByOshi(ip)
                     ?: getMacAddressByArp(ip)
                     ?: wifiInfo.macAddress
 
@@ -168,8 +168,8 @@ private fun getHostMacAddress(): String? {
             }
             if (res1.isNotEmpty()) {
                 res1.deleteCharAt(res1.length - 1)
+                return res1.toString()
             }
-            return res1.toString()
         }
     } catch (ex: java.lang.Exception) {
         return null
@@ -227,7 +227,7 @@ private fun searchIp(
     val address = InetAddress.getByName(targetIP)
     if (address.isReachable(300)) {
         val hostname = address.hostName
-        val mac = getMacAddressByOshi(targetIP) ?: getMacAddressByArp(targetIP)
+        val mac = getHostMacAddressByOshi(targetIP) ?: getMacAddressByArp(targetIP)
         val operationalSystem = getOsInfo(targetIP)
         val deviceInfo = DeviceInfo(
             hostname = hostname,
@@ -289,13 +289,12 @@ fun scanNetworkByArp(baseIP: String): List<DeviceInfo> = runBlocking {
     return@runBlocking discoveredDevices
 }
 
-fun getMacAddressByOshi(ip: String): String? {
+fun getHostMacAddressByOshi(ip: String): String? {
     try {
         val si = SystemInfo()
         val hal: HardwareAbstractionLayer = si.hardware
 
-        val networkIFs = hal.networkIFs
-        for (networkIF in networkIFs) {
+        for (networkIF in hal.networkIFs) {
             val addresses = networkIF.iPv4addr
             if (addresses.contains(ip)) {
                 return networkIF.macaddr
