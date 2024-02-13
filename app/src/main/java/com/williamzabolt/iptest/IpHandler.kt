@@ -161,7 +161,7 @@ private fun getHostMacAddress(): String? {
         val interfaces = NetworkInterface.getNetworkInterfaces()
         for (nif in interfaces) {
             if (!nif.name.equals("wlan0", ignoreCase = true)) continue
-            val macBytes = nif.hardwareAddress ?: return ""
+            val macBytes = nif.hardwareAddress ?: return null
             val res1 = java.lang.StringBuilder()
             for (b in macBytes) {
                 res1.append(String.format("%02X:", b))
