@@ -99,9 +99,27 @@ fun getIPv4Address(context: Context): DeviceInfo? {
             }
         }
     )
-
 }
 
+fun getMacAddressByArp(ipAddress: String): String? {
+    try {
+        val process = Runtime.getRuntime().exec("arp -n $ipAddress")
+        process.waitFor()
+        val reader = BufferedReader(InputStreamReader(process.inputStream))
+        var line = reader.readLine()
+        while (line != null) {
+            val parts = line.trim().split("\\s+".toRegex())
+            if (parts.size >= 3 && parts[0] == ipAddress) {
+                return parts[2]
+            }
+            line = reader.readLine()
+        }
+
+    } catch (ex: Exception) {
+        return null
+    }
+    return null
+}
 
 fun getIPAddressByWifiConnection(
     context: Context,
@@ -184,7 +202,7 @@ private fun searchIp(
     val address = InetAddress.getByName(targetIP)
     if (address.isReachable(300)) {
         val hostname = address.hostName
-        val mac = getMacAddress(targetIP)
+        val mac = getMacAddressByArp(targetIP) ?: getMacAddress(targetIP)
         val operationalSystem = getOsInfo(targetIP)
         val deviceInfo = DeviceInfo(
             hostname = hostname,
