@@ -56,7 +56,7 @@ private fun getDefaultInterface(
                     if (!address.isLoopbackAddress && !address.isLinkLocalAddress && address.isSiteLocalAddress) {
                         return DeviceInfo(
                             ip = address.hostAddress,
-                            hostname = address.hostName
+                            hostname = address.hostName,
                         )
                     }
                 }
@@ -140,7 +140,11 @@ fun getIPAddressByWifiConnection(
                 return DeviceInfo(
                     ip = ip,
                     hostname = InetAddress.getByName(ip).hostName,
-                    mac = wifiInfo.macAddress
+                    mac = getHostMacAddress() ?: getMacAddressByOshi(ip)
+                    ?: getMacAddressByArp(ip)
+                    ?: wifiInfo.macAddress
+
+
                 )
             }
         } else {
@@ -150,6 +154,27 @@ fun getIPAddressByWifiConnection(
         return nextFunction.invoke()
     }
     return nextFunction.invoke()
+}
+
+private fun getHostMacAddress(): String? {
+    try {
+        val interfaces = NetworkInterface.getNetworkInterfaces()
+        for (nif in interfaces) {
+            if (!nif.name.equals("wlan0", ignoreCase = true)) continue
+            val macBytes = nif.hardwareAddress ?: return ""
+            val res1 = java.lang.StringBuilder()
+            for (b in macBytes) {
+                res1.append(String.format("%02X:", b))
+            }
+            if (res1.isNotEmpty()) {
+                res1.deleteCharAt(res1.length - 1)
+            }
+            return res1.toString()
+        }
+    } catch (ex: java.lang.Exception) {
+        return null
+    }
+    return null
 }
 
 fun getDefaultInterfaceByIpRoute(): String? {
@@ -202,7 +227,7 @@ private fun searchIp(
     val address = InetAddress.getByName(targetIP)
     if (address.isReachable(300)) {
         val hostname = address.hostName
-        val mac = getMacAddressByArp(targetIP) ?: getMacAddress(targetIP)
+        val mac = getMacAddressByOshi(targetIP) ?: getMacAddressByArp(targetIP)
         val operationalSystem = getOsInfo(targetIP)
         val deviceInfo = DeviceInfo(
             hostname = hostname,
@@ -264,7 +289,7 @@ fun scanNetworkByArp(baseIP: String): List<DeviceInfo> = runBlocking {
     return@runBlocking discoveredDevices
 }
 
-fun getMacAddress(ip: String): String? {
+fun getMacAddressByOshi(ip: String): String? {
     try {
         val si = SystemInfo()
         val hal: HardwareAbstractionLayer = si.hardware
