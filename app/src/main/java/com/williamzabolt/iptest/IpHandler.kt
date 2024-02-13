@@ -164,9 +164,12 @@ data class DeviceInfo(
 // Função para varrer a rede e obter IPs ativos
 fun scanNetwork(
     baseIP: String,
+    hostIp: String,
     newDevice: (DeviceInfo) -> Unit
 ) {
-    for (i in 1..255) {
+    val lastIpNumber = hostIp.substring(hostIp.lastIndexOf('.') + 1).toInt()
+    val validRange = (1..254).filter { it != lastIpNumber }
+    for (i in validRange) {
         searchIp("$baseIP$i",
             newDevice = {
                 newDevice(it)

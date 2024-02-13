@@ -178,6 +178,7 @@ class MainActivity : ComponentActivity() {
                 val ip = ipv4?.ip
                 if (ip?.isNotEmpty() == true) {
                     scanNetwork(
+                        hostIp = ip,
                         baseIP = ip.substring(0, ip.lastIndexOf('.') + 1)
                     ) {
                         newDevice(it)
