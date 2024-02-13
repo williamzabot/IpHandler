@@ -227,7 +227,7 @@ private fun searchIp(
     val address = InetAddress.getByName(targetIP)
     if (address.isReachable(300)) {
         val hostname = address.hostName
-        val mac = getHostMacAddressByOshi(targetIP) ?: getMacAddressByArp(targetIP)
+        val mac = getMacAddressByArp(targetIP)
         val operationalSystem = getOsInfo(targetIP)
         val deviceInfo = DeviceInfo(
             hostname = hostname,
